@@ -10,7 +10,7 @@ Solution demonstrates federation capabilities between two Amazon EKS (Elastic Ku
 
 Deploying this solution builds the following environment in the AWS Cloud.
 
-![Architecture](source/images/architecture.png)
+![Architecture](source/images/architecture.png =500px)
 
 As a first step solution template deploys jump host in new VPC and provision all the necessary resources:
 
@@ -33,6 +33,19 @@ The jump host acts as single point of administration for Amazon EKS, Kubernetes 
 
 To launch the solution follow the step-by-step instructions in the Implementation Guide:
 https://docs.aws.amazon.com/solutions/latest/federated-amazon-eks-clusters-on-aws/
+
+
+## Uninstall resources
+You can use the **eksfedctl** tool that is provisioned on bastion host after deployment to automatically cleanup all the solution’s resources. The tool uses a preconfigured .env file (stored in the /home/ssm-user folder) that includes all the necessary parameters for a deletion. 
+```
+eksfedctl destroy -f {full path to .env file}  (e.g. ~/{stack name}.env or /home/ssm-user/{stack name}.env)
+```
+Example: 
+```
+eksfedctl destroy -f ~/eks-fed-10.env
+```
+
+Detailed instruction published here:https://docs.aws.amazon.com/solutions/latest/federated-amazon-eks-clusters-on-aws/
 
 ---
 
