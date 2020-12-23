@@ -1,0 +1,23 @@
+# A simple example of FederatedEKSConfig object
+# Field "spec" should be a valid eksctl ClusterConfig https://eksctl.io/usage/schema/
+
+# Allowed ClusterConfig fields:
+# managedNodeGroups, nodeGroups, fargateProfiles, cloudWatch, iam and git
+
+# Prohibited ClusterConfig fileds:
+# metadata, vpc, privateCluster, availabilityZones, secretsEncryption
+# It's not allowed to use regional resources in the config
+---
+apiVersion: fedk8s/v1
+kind: FederatedEKSConfig
+
+metadata:
+  name: federated-eks
+  regions:
+    - eu-west-1
+    - eu-central-1
+spec:
+  managedNodeGroups:
+    - name: ng-1
+      instanceType: m5.large
+      desiredCapacity: 2

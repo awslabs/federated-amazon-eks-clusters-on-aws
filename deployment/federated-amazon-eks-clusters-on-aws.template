@@ -1,0 +1,640 @@
+# Amazon EKS Federated Clusters
+#
+# template for federated-amazon-eks-clusters-on-aws
+# **DO NOT DELETE**
+#
+# author: aws-solutions-builder@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: "(SO0112) - Federated Amazon EKS clusters on AWS template (Version %%VERSION%%)"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Bastion Host Configuration
+        Parameters:
+          - BastionHostType
+          - LatestAmiId
+
+    ParameterLabels:
+      BastionHostType:
+        default: Bastion host type
+      LatestAmiId:
+        default: Bastion host AMI
+
+Parameters:
+  BastionHostType:
+    Type: String
+    Description: EC2 instance type
+    Default: t3.micro
+    AllowedValues:
+      [
+        t3.micro,
+        t3.small,
+        t3.medium,
+        t3.large,
+        t3a.micro,
+        t3a.small,
+        t3a.medium,
+        t3a.large,
+      ]
+    ConstraintDescription: Please choose a valid instance type
+  LatestAmiId:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+    ConstraintDescription: "Must be the name of AMI"
+    AllowedPattern: ".+"
+
+Mappings:
+  SourceCode:
+    General:
+      S3Bucket: "%%BUCKET_NAME%%"
+      KeyPrefix: "%%SOLUTION_NAME%%/%%VERSION%%"
+
+Resources:
+  BastionAutoScalingGroup:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT1H
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: "1"
+        MinInstancesInService: "1"
+        PauseTime: PT1H
+        WaitOnResourceSignals: "true"
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetOne
+        - !Ref PrivateSubnetTwo
+      LaunchConfigurationName: !Ref BastionHostLaunchConfig
+      NewInstancesProtectedFromScaleIn: "true"
+      MinSize: "1"
+      MaxSize: "1"
+      DesiredCapacity: "1"
+      Tags:
+        - Key: Name
+          Value: !Join ["-", ["bastion", !Ref "AWS::StackName"]]
+          PropagateAtLaunch: "true"
+        - Key: StackId
+          Value: !Ref "AWS::StackId"
+          PropagateAtLaunch: "true"
+
+  BastionHostLaunchConfig:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref BastionHostType
+      IamInstanceProfile: !Ref BastionInstanceProfile
+      EbsOptimized: "true"
+      InstanceMonitoring: "true"
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            Encrypted: "true"
+            DeleteOnTermination: "true"
+            VolumeSize: 20
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -Eeuxo pipefail
+          trap '/opt/aws/bin/cfn-signal --exit-code 1 --resource BastionAutoScalingGroup --region ${AWS::Region} --stack ${AWS::StackName}' ERR
+          rpm -Uvh https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource BastionHostLaunchConfig --region ${AWS::Region} --configsets default
+          /opt/aws/bin/cfn-signal --exit-code 0 --resource BastionAutoScalingGroup --region ${AWS::Region} --stack ${AWS::StackName}
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+            - config-amazon-cloudwatch-agent
+            - restart-amazon-cloudwatch-agent
+            - run-init-script
+            - run-eksfedctl
+        config-amazon-cloudwatch-agent:
+          files:
+            "/usr/local/eksfed/amazon-cloudwatch-agent.json":
+              content: !Sub |
+                {
+                  "logs": {
+                    "logs_collected": {
+                      "files": {
+                        "collect_list": [
+                          {
+                          "log_group_name": "${EKSFedLogGroup}",
+                          "log_stream_name": "{instance_id}/userdata",
+                          "file_path": "/var/log/cloud-init-output.log"
+                          },
+                          {
+                          "log_group_name": "${EKSFedLogGroup}",
+                          "log_stream_name": "{instance_id}/install",
+                          "file_path": "/var/log/cfn-init.log"
+                          },
+                          {
+                          "log_group_name": "${EKSFedLogGroup}",
+                          "log_stream_name": "{instance_id}/eksfedctl",
+                          "file_path": "/var/log/eksfedctl.log"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+            "/var/log/eksfedctl.log":
+              content: Log File
+              mode: "000666"
+        restart-amazon-cloudwatch-agent:
+          commands:
+            01_stop_service:
+              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
+            02_start_service:
+              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/usr/local/eksfed/amazon-cloudwatch-agent.json -s
+        run-init-script:
+          files:
+            "/usr/local/eksfed/init":
+              content: !Sub
+                - |
+                  #!/bin/bash
+                  set -Eeuxo pipefail
+
+                  if ! [ $(id -u) = 0 ]; then
+                    echo "The script need to be run as root." >&2
+                    exit 1
+                  fi
+
+                  PATH=/usr/local/bin:$PATH
+
+                  # download archive
+                  DOWNLOAD_FOLDER=/usr/local/eksfed
+                  ARCHIVE_FILENAME=eksfedctl.tar.gz 
+                  mkdir -p $DOWNLOAD_FOLDER
+                  wget -O $DOWNLOAD_FOLDER/$ARCHIVE_FILENAME "${ARCHIVE_URL}" 
+
+                  # updates
+                  yum update -y
+                  yum install -y tmux jq python3 pip3
+
+                  # helm
+                  curl -L "https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3" | bash
+
+                  # nodejs
+                  curl -sL "https://rpm.nodesource.com/setup_14.x" | bash -
+                  yum install nodejs -y
+
+                  # cdk
+                  npm install -g aws-cdk
+
+                  # pip
+                  pip3 install boto3 pyyaml requests
+
+                  # eksctl
+                  curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+                  mv -v /tmp/eksctl /usr/local/bin
+
+                  # kubectl
+                  curl --silent --location -o /usr/local/bin/kubectl "https://amazon-eks.s3.us-west-2.amazonaws.com/${KUBECTL_VERSION}/${KUBECTL_RELEASE_DATE}/bin/linux/amd64/kubectl"
+                  chmod +x /usr/local/bin/kubectl
+
+                  # kubefedctl
+                  curl --silent --location "https://github.com/kubernetes-sigs/kubefed/releases/download/v${KUBEFEDCTL_VERSION}/kubefedctl-${KUBEFEDCTL_VERSION}-linux-amd64.tgz" | tar xz -C /tmp
+                  mv -v /tmp/kubefedctl /usr/local/bin
+                  chmod +x /usr/local/bin/kubefedctl
+
+                  for command in jq aws node helm kubectl eksctl kubefedctl cdk; do
+                    which $command &>/dev/null && echo "$command in path" || echo "$command NOT FOUND"
+                  done
+                - KUBEFEDCTL_VERSION: "0.5.1"
+                  KUBECTL_RELEASE_DATE: "2020-11-02"
+                  KUBECTL_VERSION: "1.18.9"
+                  ARCHIVE_URL: !Sub
+                    - "https://${Bucket}.s3.amazonaws.com/${Prefix}/eksfedctl.tar.gz"
+                    - Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region" ]]
+                      Prefix: !FindInMap ["SourceCode", "General", "KeyPrefix"]
+              mode: "000554"
+          commands:
+            run-init-script:
+              command: ./init
+              cwd: /usr/local/eksfed
+        run-eksfedctl:
+          files:
+            "/usr/local/eksfed/default.yaml":
+              content: !Sub
+                - |
+                  apiVersion: fedk8s/v1
+                  kind: FederatedEKSConfig
+
+                  metadata:
+                    name: ${AWS::StackName}
+
+                  iamidentitymapping:
+                    - arn: ${ClusterAdminRole}
+                      group: system:masters
+                      username: admin
+                    - arn: ${ClusterUserRole}
+                      group: system:authenticated
+                      username: user
+                      
+                  spec:
+                    apiVersion: eksctl.io/v1alpha5
+                    kind: ClusterConfig
+
+                    metadata:
+                      version: "1.18"
+
+                    vpc:
+                      clusterEndpoints:
+                        publicAccess: true
+                        privateAccess: true
+                    
+                    cloudWatch:
+                      clusterLogging:
+                        enableTypes: 
+                          - "api"
+                          - "audit"
+                          - "authenticator"
+                          - "controllerManager"
+                          - "scheduler"
+
+                    managedNodeGroups:
+                      - name: ng-1
+                        instanceType: m5.large
+                        desiredCapacity: 1
+                - ClusterAdminRole: !GetAtt ClusterAdminRole.Arn
+                  ClusterUserRole: !GetAtt ClusterUserRole.Arn
+              mode: "000444"
+            "/usr/bin/eksfedctl":
+              content: !Sub |
+                #!/bin/bash
+                exec > >(tee -i -a /var/log/eksfedctl.log) 2>&1
+                set -Eeuo pipefail
+
+                PATH=/usr/local/bin:$PATH
+                DOWNLOAD_FOLDER=/usr/local/eksfed
+                ARCHIVE_FILENAME=eksfedctl.tar.gz
+                INSTALL_FOLDER=~/.eksfed
+
+                if [ ! -d $INSTALL_FOLDER ]
+                then
+                  mkdir -p $INSTALL_FOLDER
+
+                  tar -xzf $DOWNLOAD_FOLDER/$ARCHIVE_FILENAME \
+                    --directory $INSTALL_FOLDER \
+                    --warning=no-unknown-keyword
+
+                  cp $DOWNLOAD_FOLDER/default.yaml $INSTALL_FOLDER/default.yaml
+                fi
+                
+                $INSTALL_FOLDER/eksfedctl/eksfedctl.py "$@"
+              mode: "000555"
+          commands:
+            run-eksfedctl:
+              command: eksfedctl -v
+
+  EKSFedLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: 1
+
+  FederationBootstrapperRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "The resources ARN is unknown, because it will be created by scripts"
+          - id: F3
+            reasion: "Wildcard right here because user will need rights to work with EKS after deployment"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: FederationBootstrapperPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !GetAtt EKSFedLogGroup.Arn
+                  - !Sub
+                    - "${Arn}:*"
+                    - Arn: !GetAtt EKSFedLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:DeleteLogStream
+                  - logs:CreateLogStream
+                  - logs:PutRetentionPolicy
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action: "cloudwatch:*"
+                Resource: "*"
+              - Effect: Allow
+                Action: "eks:*"
+                Resource: "*"
+              - Effect: Allow
+                Action: "autoscaling:*"
+                Resource: "*"
+              - Effect: Allow
+                Action: "elasticloadbalancing:*"
+                Resource: "*"
+              - Effect: Allow
+                Action: "cloudformation:*"
+                Resource: "*"
+              - Effect: Allow
+                Action: "ec2:*"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
+              - Effect: Allow
+                Action:
+                  - iam:CreateServiceLinkedRole
+                Resource: "*"
+                Condition:
+                  "StringEquals":
+                    "iam:AWSServiceName":
+                      [
+                        "autoscaling.amazonaws.com",
+                        "ec2scheduled.amazonaws.com",
+                        "elasticloadbalancing.amazonaws.com",
+                        "eks.amazonaws.com",
+                        "eks-fargate.amazonaws.com",
+                        "eks-fargate-pods.amazonaws.com",
+                        "eks-nodegroup.amazonaws.com",
+                        "spot.amazonaws.com",
+                        "spotfleet.amazonaws.com",
+                        "transitgateway.amazonaws.com",
+                      ]
+              - Effect: Allow
+                Action:
+                  - iam:CreateInstanceProfile
+                  - iam:DeleteInstanceProfile
+                  - iam:GetInstanceProfile
+                  - iam:RemoveRoleFromInstanceProfile
+                  - iam:GetRole
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:AttachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:ListInstanceProfiles
+                  - iam:AddRoleToInstanceProfile
+                  - iam:ListInstanceProfilesForRole
+                  - iam:PassRole
+                  - iam:DetachRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:GetOpenIDConnectProvider
+                  - iam:CreateOpenIDConnectProvider
+                  - iam:DeleteOpenIDConnectProvider
+                  - iam:ListAttachedRolePolicies
+                  - iam:TagRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:instance-profile/eksctl-*"
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/eksctl-*"
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/*"
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/eksctl-managed-*"
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:*:${AWS::AccountId}:parameter/aws/*"
+                  - !Sub "arn:aws:ssm:*::parameter/aws/*"
+              - Effect: Allow
+                Action:
+                  - kms:CreateGrant
+                  - kms:DescribeKey
+                Resource: "*"
+
+  BastionInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: /
+      Roles:
+        - !Ref FederationBootstrapperRole
+
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: 172.20.0.0/16
+      EnableDnsHostnames: true
+
+  VPCFlowLog:
+    Type: "AWS::EC2::FlowLog"
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt FederationBootstrapperRole.Arn
+      LogGroupName: !Ref EKSFedLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: REJECT
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  ElasticIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+
+  PublicSubnet:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 172.20.1.0/24
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicSubnetRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: [InternetGateway, AttachGateway]
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateSubnetOne:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 172.20.3.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: { Ref: "AWS::Region" }
+
+  PrivateRouteTableOne:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+
+  RouteNatGatewayOne:
+    Type: "AWS::EC2::Route"
+    DependsOn: [NatGateway]
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTableOne
+
+  PrivateSubnetRouteTableAssociationOne:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PrivateSubnetOne
+      RouteTableId: !Ref PrivateRouteTableOne
+
+  PrivateSubnetTwo:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 172.20.4.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: { Ref: "AWS::Region" }
+
+  PrivateRouteTableTwo:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+
+  RouteNatGatewayTwo:
+    Type: "AWS::EC2::Route"
+    DependsOn: [NatGateway]
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTableTwo
+
+  PrivateSubnetRouteTableAssociationTwo:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PrivateSubnetTwo
+      RouteTableId: !Ref PrivateRouteTableTwo
+
+  ClusterAdminRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "The resources ARN is unknown"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ClusterAdminGroupPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "sts:GetCallerIdentity"
+                Resource: "*"
+
+  ClusterUserRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "The resources ARN is unknown"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ClusterAdminGroupPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "sts:GetCallerIdentity"
+                Resource: "*"
+
+  ClusterAdminGroup:
+    Type: "AWS::IAM::Group"
+    Properties:
+      Policies:
+        - PolicyName: ClusterAdminGroupPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "sts:AssumeRole"
+                Resource: !GetAtt ClusterAdminRole.Arn
+
+  ClusterUserGroup:
+    Type: "AWS::IAM::Group"
+    Properties:
+      Policies:
+        - PolicyName: ClusterAdminGroupPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "sts:AssumeRole"
+                Resource: !GetAtt ClusterUserRole.Arn
+
+Outputs:
+  StackName:
+    Description: "Stack Name"
+    Value: !Sub "${AWS::StackName}"
+  LogGroupName:
+    Description: "Bastion Host Logs"
+    Value: !Ref EKSFedLogGroup
+  ClusterAdminGroupArn:
+    Description: "Cluster Admin Group Arn"
+    Value: !GetAtt ClusterAdminGroup.Arn
+  ClusterUserGroupArn:
+    Description: "Cluster User Group Arn"
+    Value: !GetAtt ClusterUserGroup.Arn

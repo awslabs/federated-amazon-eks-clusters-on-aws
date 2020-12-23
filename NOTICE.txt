@@ -1,0 +1,2 @@
+Federated Amazon EKS Clusters on AWS
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved. 

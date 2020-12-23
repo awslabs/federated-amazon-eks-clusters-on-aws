@@ -1,0 +1,34 @@
+apiVersion: types.kubefed.io/v1beta1
+kind: FederatedDeployment
+metadata:
+  name: test-deployment
+  namespace: test
+spec:
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: nginx
+      template:
+        metadata:
+          labels:
+            app: nginx
+        spec:
+          tolerations:
+            - effect: NoExecute
+              key: node.kubernetes.io/unreachable
+              operator: Exists
+              tolerationSeconds: 30
+            - effect: NoExecute
+              key: node.kubernetes.io/not-ready
+              operator: Exists
+              tolerationSeconds: 30
+          containers:
+            - image: nginx
+              name: nginx
+  placement:
+    clusterSelector: {}

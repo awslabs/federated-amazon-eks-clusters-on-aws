@@ -1,0 +1,35 @@
+# A simple example of FederatedEKSConfig object
+# Field "spec" should be a valid eksctl ClusterConfig https://eksctl.io/usage/schema/
+
+# Allowed ClusterConfig fields:
+# managedNodeGroups, nodeGroups, fargateProfiles, cloudWatch, iam and git
+
+# Prohibited ClusterConfig fileds:
+# metadata, vpc, privateCluster, availabilityZones, secretsEncryption
+# It's not allowed to use regional resources in the config
+---
+apiVersion: fedk8s/v1
+kind: FederatedEKSConfig
+
+metadata:
+  name: federated-eks
+  regions:
+    # AWS Fargate with Amazon EKS is currently only available in the following Regions:
+    # https://docs.aws.amazon.com/eks/latest/userguide/fargate.html
+    - eu-west-1
+    - eu-central-1
+spec:
+  nodeGroups:
+    - name: ng-1
+      instanceType: m5.large
+      desiredCapacity: 1
+
+  fargateProfiles:
+    - name: fp-default
+      selectors:
+        # All workloads in the "default" Kubernetes namespace will be
+        # scheduled onto Fargate:
+        - namespace: default
+        # All workloads in the "kube-system" Kubernetes namespace will be
+        # scheduled onto Fargate:
+        - namespace: kube-system

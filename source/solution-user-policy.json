@@ -1,0 +1,100 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "IAM",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateInstanceProfile",
+        "iam:CreateServiceLinkedRole",
+        "iam:DeleteInstanceProfile",
+        "iam:UntagUser",
+        "iam:DeleteGroup",
+        "iam:DeleteGroupPolicy",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:UntagRole",
+        "iam:TagRole",
+        "iam:PassRole",
+        "iam:ListAttachedRolePolicies",
+        "iam:PutGroupPolicy",
+        "iam:PutRolePolicy",
+        "iam:ListRoles",
+        "iam:CreateRole",
+        "iam:TagUser",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:CreateGroup",
+        "iam:GetGroup",
+        "iam:GetRole",
+        "iam:GetPolicy",
+        "iam:GetRolePolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:GetPolicyVersion"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DeleteLogStream",
+        "logs:CreateLogStream",
+        "logs:PutRetentionPolicy",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "sns:ListTopics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::*/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:CreateBucket", "s3:DeleteBucket"],
+      "Resource": "arn:aws:s3:::*"
+    },
+    {
+      "Sid": "SSM",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameters",
+        "ssm:DescribeInstanceInformation",
+        "ssm:StartSession",
+        "ssm:TerminateSession",
+        "ssm:ResumeSession",
+        "ssm:DescribeSessions",
+        "ssm:GetConnectionStatus",
+        "ssm:GetParameter"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "KubectlRequired",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:*",
+        "elasticloadbalancing:*",
+        "cloudwatch:*",
+        "autoscaling:*",
+        "ec2:*",
+        "eks:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "KMS",
+      "Effect": "Allow",
+      "Action": ["kms:CreateGrant", "kms:DescribeKey"],
+      "Resource": "*"
+    }
+  ]
+}
