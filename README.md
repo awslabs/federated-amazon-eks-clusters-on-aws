@@ -9,8 +9,9 @@ Solution demonstrates federation capabilities between two Amazon EKS (Elastic Ku
 ## Architecture
 
 Deploying this solution builds the following environment in the AWS Cloud.
-
-![Architecture](source/images/architecture.png =500px)
+<p align="center">
+<img src="source/images/architecture.png" alt="Architecture" width="500"/>
+</p>
 
 As a first step solution template deploys jump host in new VPC and provision all the necessary resources:
 
