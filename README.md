@@ -46,7 +46,8 @@ Example:
 eksfedctl destroy -f ~/eks-fed-10.env
 ```
 
-Detailed instruction published here:https://docs.aws.amazon.com/solutions/latest/federated-amazon-eks-clusters-on-aws/
+Detailed instruction published here:
+https://docs.aws.amazon.com/solutions/latest/federated-amazon-eks-clusters-on-aws/
 
 ---
 
