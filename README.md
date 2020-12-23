@@ -1,6 +1,6 @@
 # Federated Amazon EKS Clusters on AWS
 
-Solution demonstrates federation capabilities between two Amazon EKS (Elastic Kubernetes Service) clusters through a secured VPC peering connection. Federation is done by using the official [Kubernetes KubeFed project](https://github.com/kubernetes-sigs/kubefed). The following scenarios could benefit from Amazon EKS cluster’s federation but not limited to them:
+The solution demonstrates federation capabilities between two Amazon EKS (Elastic Kubernetes Service) clusters through a secured VPC peering connection. Federation is done by using the official [Kubernetes KubeFed project](https://github.com/kubernetes-sigs/kubefed). The following scenarios could benefit from Amazon EKS cluster’s federation but not limited to them:
 
 - Applications that need high availability, resilient, and automatic scaling functionality between EKS clusters. Kubernetes federation could automatically detect failures of clusters and compensate the number of lost replicas in federated applications across all clusters including the ones in different regions. That would help with keeping compute power on the same level using cross-cluster scheduling features.
 - Kubernetes Federation could be useful for hybrid scenarios when building an application layer with data residency, locality, and low latency requirements. For example, you can build applications that will have a subset of services responsible for private data processing within the country and the rest of the services in other EKS clusters.
