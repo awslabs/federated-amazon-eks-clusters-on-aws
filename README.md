@@ -6,6 +6,8 @@ The solution demonstrates federation capabilities between two Amazon EKS (Elasti
 - Kubernetes Federation could be useful for hybrid scenarios when building an application layer with data residency, locality, and low latency requirements. For example, you can build applications that will have a subset of services responsible for private data processing within the country and the rest of the services in other EKS clusters.
 - Federation is also helping keep in sync and distribute configurations for applications, services, policies to multiple EKS clusters. But we highly recommend using the best practices of staging environment or partial deployment to avoid mass misconfigurations.
 
+:warning: Note: At the date of this solution’s publication, the current version of KubeFed is not in release state and is only recommended for testing purposes. You must check the status of KubeFed if you plan to use it when implementing this solution.
+
 ## Architecture
 
 Deploying this solution builds the following environment in the AWS Cloud.
