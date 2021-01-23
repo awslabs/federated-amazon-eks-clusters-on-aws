@@ -28,7 +28,7 @@ After login into the jump host and executes the deployment script the following 
 - Two VPCs for EKS clusters in selected regions.
 - Two AWS EKS clusters in different AWS regions, each in its own VPC without distance limitation.
 - VPC peering between three VPCs for secure communication between jump host and Federation control panel with all federated Amazon EKS clusters.
-- Federation control panel is a regular pod in one of AWS EKS clusters and act as proxy between Kubernetes administrator and all deployed AWS EKS clusters.
+- Federation control panel based on KubeFed is a regular pod in one of AWS EKS clusters and act as proxy between Kubernetes administrator and all deployed AWS EKS clusters.
 
 The jump host acts as single point of administration for Amazon EKS, Kubernetes resources and also as single point of deployment and configuration.
 
