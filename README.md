@@ -1,4 +1,4 @@
-# Federated Kubernetes Clusters Using Amazon EKS Clusters and KubeFed
+# Federated Kubernetes Clusters Using Amazon EKS and KubeFed
 
 The solution demonstrates federation capabilities between two Amazon EKS (Elastic Kubernetes Service) clusters through a secured VPC peering connection. Federation is done by using the official [Kubernetes KubeFed project](https://github.com/kubernetes-sigs/kubefed). The following scenarios could benefit from Amazon EKS cluster’s federation but not limited to them:
 
