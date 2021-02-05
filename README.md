@@ -35,7 +35,7 @@ The jump host acts as single point of administration for Amazon EKS, Kubernetes 
 ## Deployment
 
 To launch the solution follow the step-by-step instructions in the Implementation Guide:
-https://docs.aws.amazon.com/solutions/latest/federated-amazon-eks-clusters-on-aws/
+<a href="federated-kubernetes-clusters-using-amazon-eks-and-kubefed.pdf">federated-kubernetes-clusters-using-amazon-eks-and-kubefed.pdf</a>
 
 
 ## Uninstall resources
