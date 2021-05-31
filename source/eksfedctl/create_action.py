@@ -167,7 +167,8 @@ def validate_user_yaml(input_yaml):
 def load_yaml(file_name):
     if file_name == "-":
         try:
-            config = yaml.load(sys.stdin, Loader=yaml.FullLoader)
+            #config = yaml.load(sys.stdin, Loader=yaml.FullLoader)
+            config = yaml.safe_load(sys.stdin)
             return config
         except yaml.YAMLError as exc:
             raise Exception(f"Error in configuration file: {exc}")
@@ -178,7 +179,8 @@ def load_yaml(file_name):
         try:
             with open(file_name, "r") as file:
                 try:
-                    config = yaml.load(file, Loader=yaml.FullLoader)
+                    #config = yaml.load(file, Loader=yaml.FullLoader)
+                    config = yaml.safe_load(sys.stdin)
                     return config
                 except yaml.YAMLError as exc:
                     raise Exception(f"Error in configuration file: {exc}")
