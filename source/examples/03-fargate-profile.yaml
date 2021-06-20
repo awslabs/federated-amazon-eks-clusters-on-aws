@@ -10,7 +10,6 @@
 ---
 apiVersion: fedk8s/v1
 kind: FederatedEKSConfig
-
 metadata:
   name: federated-eks
   regions:
@@ -23,7 +22,6 @@ spec:
     - name: ng-1
       instanceType: m5.large
       desiredCapacity: 1
-
   fargateProfiles:
     - name: fp-default
       selectors:
