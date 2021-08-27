@@ -51,6 +51,11 @@ eksfedctl destroy -f ~/eks-fed-10.env
 Detailed instruction published here:
 https://docs.aws.amazon.com/solutions/latest/federated-amazon-eks-clusters-on-aws/
 
+## Anonymous operational metrics
+This solution collects anonymous operational metrics to help AWS improve the
+quality of features of the solution. For more information, including how to disable
+this capability, please see the [implementation guide](./federated-kubernetes-clusters-using-amazon-eks-and-kubefed.pdf).
+
 ---
 
 Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
