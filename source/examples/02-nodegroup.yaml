@@ -10,7 +10,6 @@
 ---
 apiVersion: fedk8s/v1
 kind: FederatedEKSConfig
-
 metadata:
   name: federated-eks
   regions:
